@@ -13,7 +13,6 @@ const query = {
 
 const sort = { popularity: -1 };
 
-// План до створення індексу: очікується COLLSCAN і memory sort.
 print("Execution plan without indexes:");
 printjson(
     db.tracks
@@ -22,8 +21,6 @@ printjson(
         .explain("executionStats")
 );
 
-// Equality-поле стоїть першим, щоб обмежити індекс до жанру pop.
-// Поле сортування стоїть перед range-полем, щоб уникнути blocking SORT.
 db.tracks.createIndex(
     {
         track_genre: 1,
