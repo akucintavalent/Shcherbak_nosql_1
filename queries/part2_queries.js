@@ -19,13 +19,23 @@ const missingRequiredFields = db.tracks.countDocuments({
 print("Documents missing at least one required field: " + missingRequiredFields);
 print("All documents match the expected schema: " + (missingRequiredFields === 0));
 
-const task1Result = db.tracks.find({
+const task1Filter = {
     "audio_features.danceability": { $gt: 0.7 },
     "audio_features.energy": { $gt: 0.7 },
     duration_ms: { $gte: 180000, $lte: 300000 }
-})
+};
 
-print("Tracks with danceability > 0.7, energy > 0.7, and duration between 3 and 5 minutes: " + task1Result.count());
+const task1Result = db.tracks.find(task1Filter, {
+    _id: 0,
+    track_name: 1,
+    artists: 1,
+    duration_ms: 1,
+    "audio_features.danceability": 1,
+    "audio_features.energy": 1
+});
+
+print("Tracks with danceability > 0.7, energy > 0.7, and duration between 3 and 5 minutes: " + db.tracks.countDocuments(task1Filter));
+task1Result.forEach((track) => printjson(track));
 
 const task2Result = db.tracks.aggregate([
     { $unwind: "$artists" },
