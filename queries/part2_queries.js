@@ -38,6 +38,7 @@ print("Tracks with danceability > 0.7, energy > 0.7, and duration between 3 and 
 task1Result.forEach((track) => printjson(track));
 
 const task2Result = db.tracks.aggregate([
+    { $group: { _id: "$track_id", artists: { $first: "$artists" }, popularity: { $first: "$popularity" } } },
     { $unwind: "$artists" },
     {
         $group: {
@@ -103,16 +104,20 @@ const task3Result = db.tracks.aggregate([
             genre: "$_id",
             outlier_threshold: { $round: ["$outlierThreshold", 1] },
             outlier_tracks: {
-                $filter: {
-                    input: "$tracks",
-                    as: "track",
-                    cond: {
-                        $gt: ["$$track.audio_features.tempo", "$outlierThreshold"]
-                    }
+                $sortArray: {
+                    input: {
+                        $filter: {
+                            input: "$tracks",
+                            as: "track",
+                            cond: { $gt: ["$$track.audio_features.tempo", "$outlierThreshold"] }
+                        }
+                    },
+                    sortBy: { "audio_features.tempo": -1 }
                 }
             }
         }
     },
+    { $match: { "outlier_tracks.0": { $exists: true } } },
     { $sort: { genre: 1 } }
 ]).toArray();
 
