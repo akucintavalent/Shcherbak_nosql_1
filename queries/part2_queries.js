@@ -19,26 +19,15 @@ const missingRequiredFields = db.tracks.countDocuments({
 print("Documents missing at least one required field: " + missingRequiredFields);
 print("All documents match the expected schema: " + (missingRequiredFields === 0));
 
-const task1Result = db.tracks_raw.find({
-    danceability: { $gt: 0.7 },
-    energy: { $gt: 0.7 },
-    duration_ms: { $gt: 180000, $lt: 300000 }
+const task1Result = db.tracks.find({
+    "audio_features.danceability": { $gt: 0.7 },
+    "audio_features.energy": { $gt: 0.7 },
+    duration_ms: { $gte: 180000, $lte: 300000 }
 })
 
 print("Tracks with danceability > 0.7, energy > 0.7, and duration between 3 and 5 minutes: " + task1Result.count());
 
-const task2Result = db.tracks_raw.aggregate([
-    {
-        $set: {
-            artists: {
-                $map: {
-                    input: { $split: ["$artists", ";"] },
-                    as: "artist",
-                    in: { $trim: { input: "$$artist" } }
-                }
-            }
-        }
-    },
+const task2Result = db.tracks.aggregate([
     { $unwind: "$artists" },
     {
         $group: {
@@ -120,11 +109,11 @@ const task3Result = db.tracks.aggregate([
 print("Tracks with unusually high tempo for their genre:");
 task3Result.forEach((genre) => printjson(genre));
 
-const task4Result = db.tracks_raw.find(
+const task4Result = db.tracks.find(
     {
-        loudness: { $lt: -10 },
-        speechiness: { $lt: 0.1 },
-        instrumentalness: { $gt: 0.5 },
+        "audio_features.loudness": { $lt: -10 },
+        "audio_features.speechiness": { $lt: 0.1 },
+        "audio_features.instrumentalness": { $gt: 0.5 },
         explicit: false
     },
     {
@@ -132,12 +121,12 @@ const task4Result = db.tracks_raw.find(
         track_id: 1,
         track_name: 1,
         artists: 1,
-        loudness: 1,
-        speechiness: 1,
-        instrumentalness: 1,
+        "audio_features.loudness": 1,
+        "audio_features.speechiness": 1,
+        "audio_features.instrumentalness": 1,
         explicit: 1
     }
-).sort({ loudness: 1, track_name: 1 });
+).sort({ "audio_features.loudness": 1, track_name: 1 });
 
 print("Tracks suitable for background listening while working:");
 task4Result.forEach((track) => printjson(track));
