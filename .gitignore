@@ -1,2 +1,3 @@
 .env
 *.priv
+dataset.csv
