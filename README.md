@@ -152,8 +152,6 @@ mongosh "<MONGO_URI>" --file queries/part3_indexes.js
 - вкладені дані ростуть без кінця - документ може містити тільки 16 МБ даних, а оновлення стають дорогими. 
 - порівняння на рівність цілого об'єкта є чутливим до порядку полів, тому треба фільтрувати по окремих полях.
 
-Питання: Чому виконавці зберігаються як масив, а не як рядок? Які запити стають простішими?
-
 ### Питання 2:
 
 Чому виконавці зберігаються як масив, а не як рядок? Які запити стають простішими?
@@ -162,7 +160,321 @@ mongosh "<MONGO_URI>" --file queries/part3_indexes.js
 
 Пошук по виконавцям значно спрощується, тому що немає потреби використовувати регулярні вирази, які легко дають хибні збіги. MongoDB має нативну функціональність, яка дозволяє працювати з масивами (на приклад, знаходити одне або більше значеннь в масиві, тощо).
 
+## Частина 2
 
+### Запит 1
 
+```javascript
+const task1Filter = {
+    "audio_features.danceability": { $gt: 0.7 },
+    "audio_features.energy": { $gt: 0.7 },
+    duration_ms: { $gte: 180000, $lte: 300000 }
+};
 
+const task1Result = db.tracks.find(task1Filter, {
+    _id: 0,
+    track_name: 1,
+    artists: 1,
+    duration_ms: 1,
+    "audio_features.danceability": 1,
+    "audio_features.energy": 1
+});
+```
 
+Що робить запит: Знаходить в колекції `tracks` треки, які мають
+високу танцювальність (`danceability > 0.7`), високу енергійність (`energy > 0.7`)
+та тривалість від 3 до 5 хвилин (180000–300000 мс) одночасно. Запит повертає тільки вибрані поля, які ми перерахували в другому аргументі функції яка виконує даний запит.
+
+В даному випадку, функція find() працює так, що знаходить всі документи в колекції, які задовільняють всі умови вказані в першому аргументі (task1Filter), і обмежує поля функції до тих, що вказані в другому аргументі (які мають одиничку), лише _id завжди має одиничку, тому якщо ми не хочемо його вибирати, то мусимо подати значення 0. Поля у вкладених об'єктах вибираються через подання стежки до даного поля, вживаючи крапки (на приклад `"audio_features.danceability": 1,`). 
+
+Результат: 7311 знайдених треків.
+
+Приклад одного з них:
+
+```json
+{
+  track_name: 'Hold On - Remix',
+  duration_ms: 188133,
+  artists: [
+    'Chord Overstreet',
+    'Deepend'
+  ],
+  audio_features: {
+    danceability: 0.755,
+    energy: 0.78
+  }
+}
+```
+
+### Запит 2
+
+```javascript
+const task2Result = db.tracks.aggregate([
+    { $group: { _id: "$track_id", artists: { $first: "$artists" }, popularity: { $first: "$popularity" } } },
+    { $unwind: "$artists" },
+    {
+        $group: {
+            _id: "$artists",
+            trackCount: { $sum: 1 },
+            minPopularity: { $min: "$popularity" },
+            averagePopularity: { $avg: "$popularity" }
+        }
+    },
+    {
+        $match: {
+            trackCount: { $gte: 3 },
+            minPopularity: { $gte: 60 }
+        }
+    },
+    { $sort: { averagePopularity: -1, _id: 1 } },
+    { $limit: 20 },
+    {
+        $project: {
+            _id: 0,
+            artist: "$_id",
+            trackCount: 1,
+            minPopularity: { $round: ["$minPopularity", 1] },
+            averagePopularity: { $round: ["$averagePopularity", 1] }
+        }
+    }
+]).toArray();
+```
+
+Що робить запит: знаходить всіх виконавців, які мають мінімум 3 треки, і всі треки якого мають популярність мінімум 60 відсотків, сортує їх за середньою популярністю і повертає перших 20 виконавців, виводячи їх імена, кількість треків, мінімальну та середню популярність, заокруглену до однієї десятої.
+
+Пояснення кожного етапу запиту:
+
+Етап 1.
+
+```javascript
+{ $group: { _id: "$track_id", artists: { $first: "$artists" }, popularity: { $first: "$popularity" } } },
+```
+
+Групує документи з однакоми полями track_id і повертає їх track_id, а також поля artists і popularity з першого знайденого документа з таким track_id.
+
+Етап 2.
+
+```javascript
+{ $unwind: "$artists" },
+```
+
+Бере дані з попереднього етапу і створює стільки копій кожного документа скільки є значень в таблиці artists цього документа і до кожної копії в полі artists подає рядок з одним зі значень з таблиці так, щоб всі значення з цієї таблиці artists з даного документа були використані. 
+
+Етап 3.
+
+```javascript
+{
+    $group: {
+        _id: "$artists",
+        trackCount: { $sum: 1 },
+        minPopularity: { $min: "$popularity" },
+        averagePopularity: { $avg: "$popularity" }
+    }
+},
+```
+
+Групує дані за полем artists, яке містить ім'я одного з виконавців даного треку, для кожного виконавця рахує їх кількість (trackCount), знаходить наймешншу (minPopularity) і середню (averagePopularity) популярність серед усіх його треків.
+
+Етап 4.
+
+```javascript
+{
+    $match: {
+        trackCount: { $gte: 3 },
+        minPopularity: { $gte: 60 }
+    }
+},
+```
+
+Бере набір документів з попереднього етапу і фільтрує їх так, щоб залишити лише виконавців, які мають мінімум 3 треки і всі його треки мають мінімум 60 відсотків популярності. 
+
+Етап 5.
+
+```javascript
+{ $sort: { averagePopularity: -1, _id: 1 } },
+```
+
+Сортує результат з попереднього етапу по середній популярності в порядку спадання, а якщо популярність така сама, то сортує ще й по _id.
+
+Етап 6.
+
+```javascript
+{ $limit: 20 },
+```
+
+Залишає лише 20 перших документів з результату попереднього етапу. 
+
+Етап 7.
+
+```javascript
+{
+    $project: {
+        _id: 0,
+        artist: "$_id",
+        trackCount: 1,
+        minPopularity: { $round: ["$minPopularity", 1] },
+        averagePopularity: { $round: ["$averagePopularity", 1] }
+    }
+}
+```
+
+Бере результат попереднього етапу і повертає документи, які містять поля з ім'ям виконавця (artist), кількістю його треків (trackCount), популярністю його найменш популярного треку заокруглену до однієї десятої (minPopularity) та середню популярність його треків також заокруглену до однієї десятої (averagePopularity).
+
+Результат запиту повертаємо у вигляді таблиці об'єктів за допомогою `.toArray()`.
+
+### Запит 3
+
+```javascript
+const task3Result = db.tracks.aggregate([
+    {
+        $group: {
+            _id: "$track_genre",
+            avgTempo: { $avg: "$audio_features.tempo" },
+            stdDevTempo: { $stdDevPop: "$audio_features.tempo" },
+            tracks: {
+                $push: {
+                    _id: "$_id",
+                    track_name: "$track_name",
+                    popularity: "$popularity",
+                    artists: "$artists",
+                    audio_features: {
+                        tempo: "$audio_features.tempo"
+                    }
+                }
+            }
+        }
+    },
+    {
+        $set: {
+            outlierThreshold: {
+                $add: ["$avgTempo", { $multiply: [2, "$stdDevTempo"] }]
+            }
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            avg_tempo: { $round: ["$avgTempo", 1] },
+            genre: "$_id",
+            outlier_threshold: { $round: ["$outlierThreshold", 1] },
+            outlier_tracks: {
+                $sortArray: {
+                    input: {
+                        $filter: {
+                            input: "$tracks",
+                            as: "track",
+                            cond: { $gt: ["$$track.audio_features.tempo", "$outlierThreshold"] }
+                        }
+                    },
+                    sortBy: { "audio_features.tempo": -1 }
+                }
+            }
+        }
+    },
+    { $match: { "outlier_tracks.0": { $exists: true } } },
+    { $sort: { genre: 1 } }
+]).toArray();
+```
+
+Що робить запит: знаходить всі треки, яких темп відхиляється більш ніж на два стандартних відхилення від середнього (далі буду називати це значення порогом) в позитивному напрямку для їх жанру. 
+
+Пояснення кожного етапу запиту.
+
+Етап 1.
+
+```javascript
+{ $group: { ... } }
+```
+
+Групує треки за жанром, видає для кожного жанру середній темп треків, стандартне відхилення треків а також всі треки в цьому жанрі з деякою інформацію про них. 
+
+Етап 2.
+
+```javascript
+{ $set: { ... } }
+```
+
+Додає поле яке містить значення порогу для кожного жанру.
+
+Етап 3.
+
+```javascript
+{ $project: { ... } }
+```
+
+Повертає результат попереднього етапу але з заокругленнями до однієї десятої для кожного числа з цифрами після коми, а також знаходить треки яких темп перевищує поріг і сортує їх за темпом в спадаючому порядку.
+
+Етап 4.
+
+```javascript
+{ $match: { ... } }
+```
+
+Повертає результат з попереднього етапу, але без жантів для яких нема жодних треків яким темп перевищує поріг.
+
+Етап 5.
+
+```javascript
+{ $sort: { ... } }
+```
+
+Сортує результат етапу 5 за жанром у зростаючому порядку.
+
+### Запит 4
+
+```javascript
+const task4Result = db.tracks.find(
+    {
+        "audio_features.loudness": { $lt: -10 },
+        "audio_features.speechiness": { $lt: 0.1 },
+        "audio_features.instrumentalness": { $gt: 0.5 },
+        explicit: false
+    },
+    {
+        _id: 0,
+        track_id: 1,
+        track_name: 1,
+        artists: 1,
+        "audio_features.loudness": 1,
+        "audio_features.speechiness": 1,
+        "audio_features.instrumentalness": 1,
+        explicit: 1
+    }
+).sort({ "audio_features.loudness": 1, track_name: 1 });
+```
+
+Що робить запит: знаходить всі треки з loudness < -10 (тихі), speechiness < 0.1 (мало тексту) та instrumentalness > 0.5 (переважно інструментальні) і які не містять explicit контенту і повертає вибрані поля для кожного треку, сортує результат по гучності і назвоі треку для передбачуваних результатів.
+
+Пояснення.
+
+```javascript
+{
+    "audio_features.loudness": { $lt: -10 },
+    "audio_features.speechiness": { $lt: 0.1 },
+    "audio_features.instrumentalness": { $gt: 0.5 },
+    explicit: false
+},
+```
+
+Це дозволяє відфільтрувати всі треки за поданими умовами. 
+
+```javascript
+{
+    _id: 0,
+    track_id: 1,
+    track_name: 1,
+    artists: 1,
+    "audio_features.loudness": 1,
+    "audio_features.speechiness": 1,
+    "audio_features.instrumentalness": 1,
+    explicit: 1
+}
+```
+
+Вибирає тільки поля з одиничками і видаляє поле _id з результату.
+
+```javascript
+.sort({ "audio_features.loudness": 1, track_name: 1 });
+```
+
+Сортує результат для детермінованої відтворюваності результатів запиту. 
