@@ -81,6 +81,14 @@ mongosh "<MONGO_URI>" --file scripts/02_transform.js
 mongosh "<MONGO_URI>" --file queries/part2_queries.js
 ```
 
+Для зручності замість попереднього скрипту можна виконати:
+
+```
+mongosh "<MONGO_URI>" --file queries/part2_queries.js > part2_output.priv
+```
+
+щоб записати вивід скрипту у файлі. Я вибрав розширення `.priv` лише тому, що маємо файл requirements.txt, який ми не хочемо ігнорувати у `.gitignore`.
+
 ## Частина 1
 
 Схема документа в колекції tracks:
@@ -246,7 +254,7 @@ const task2Result = db.tracks.aggregate([
 { $group: { _id: "$track_id", artists: { $first: "$artists" }, popularity: { $first: "$popularity" } } },
 ```
 
-Групує документи з однакоми полями track_id і повертає їх track_id, а також поля artists і popularity з першого знайденого документа з таким track_id, щоб не повертати дублікатів.
+Групує документи з однакоми полями track_id і повертає їх track_id, а також поля artists і popularity з першого знайденого документа з таким track_id, щоб не повертати дублікатів. Один трек у датасеті може лежати в кількох жанрах, тому без цього кроку виконавці отримали б зайві треки.
 
 Етап 2.
 
@@ -318,6 +326,18 @@ const task2Result = db.tracks.aggregate([
 
 Результат запиту повертаємо у вигляді таблиці об'єктів за допомогою `.toArray()`.
 
+Результат: 20 документів про найпопулярніших артистів
+
+Приклад документу:
+```
+{
+  trackCount: 3,
+  artist: 'Harry Styles',
+  minPopularity: 89,
+  averagePopularity: 92
+}
+```
+
 ### Запит 3
 
 ```javascript
@@ -382,7 +402,7 @@ const task3Result = db.tracks.aggregate([
 { $group: { ... } }
 ```
 
-Групує треки за жанром, видає для кожного жанру середній темп треків, стандартне відхилення треків (за допомогою `$stdDevPop`), а також всі треки в цьому жанрі з деякою інформацію про них.
+Групує треки за жанром, видає для кожного жанру середній темп треків, стандартне відхилення темпу треків (за допомогою `$stdDevPop`), яке дозволяє знайти викиди для даних з нормальним розподілом, яких згідно статистики є приблизно 2.1%, а також всі треки в цьому жанрі з деякою інформацію про них.
 
 Етап 2.
 
@@ -415,6 +435,44 @@ const task3Result = db.tracks.aggregate([
 ```
 
 Сортує результат етапу 4 за жанром у зростаючому порядку.
+
+Результат: документи з інформацією про треки з швидким для свого жанру темпом, згруповані по жанрам.
+
+Приклад документа:
+
+```javascript
+{
+  avg_tempo: 119,
+  genre: 'acoustic',
+  outlier_threshold: 178.5,
+  outlier_tracks: [
+    {
+      _id: ObjectId('6aee11a5dc495743d8b0f9ce'),
+      track_name: 'Fast Car',
+      popularity: 61,
+      artists: [
+        'Boyce Avenue',
+        'Kina Grannis'
+      ],
+      audio_features: {
+        tempo: 204.961
+      }
+    },
+    {
+      _id: ObjectId('6aee11a5dc495743d8b0fa55'),
+      track_name: 'Running Up That Hill (A Deal With God) - Acoustic',
+      popularity: 51,
+      artists: [
+        'Jonah Baker'
+      ],
+      audio_features: {
+        tempo: 203.816
+      }
+    },
+    //...
+  ]
+}
+```
 
 ### Запит 4
 
@@ -474,3 +532,23 @@ const task4Result = db.tracks.find(
 ```
 
 Сортує результат для детермінованої відтворюваності результатів запиту. 
+
+Результат: список треків, які задовільняють умови, з вибраними полями.
+
+Приклад такого треку:
+
+```javascript
+{
+  track_id: '5utUKeJ2ZG9KCZbvdEzPfa',
+  track_name: 'Soothing White Noise - Loopable With No Fade',
+  explicit: false,
+  artists: [
+    'White Noise Sleep Sounds'
+  ],
+  audio_features: {
+    loudness: -49.531,
+    speechiness: 0,
+    instrumentalness: 0.943
+  }
+}
+```

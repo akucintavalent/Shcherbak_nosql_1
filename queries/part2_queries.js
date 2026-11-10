@@ -34,6 +34,7 @@ const task1Result = db.tracks.find(task1Filter, {
     "audio_features.energy": 1
 });
 
+print("Task 1")
 print("Tracks with danceability > 0.7, energy > 0.7, and duration between 3 and 5 minutes: " + db.tracks.countDocuments(task1Filter));
 task1Result.forEach((track) => printjson(track));
 
@@ -67,6 +68,7 @@ const task2Result = db.tracks.aggregate([
     }
 ]).toArray();
 
+print("Task 2")
 print("Top 20 popular artists:");
 task2Result.forEach((artist) => printjson(artist));
 
@@ -121,6 +123,7 @@ const task3Result = db.tracks.aggregate([
     { $sort: { genre: 1 } }
 ]).toArray();
 
+print("Task 3")
 print("Tracks with unusually high tempo for their genre:");
 task3Result.forEach((genre) => printjson(genre));
 
@@ -143,5 +146,6 @@ const task4Result = db.tracks.find(
     }
 ).sort({ "audio_features.loudness": 1, track_name: 1 });
 
+print("Task 4")
 print("Tracks suitable for background listening while working:");
 task4Result.forEach((track) => printjson(track));
