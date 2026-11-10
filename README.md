@@ -254,7 +254,7 @@ const task2Result = db.tracks.aggregate([
 { $group: { _id: "$track_id", artists: { $first: "$artists" }, popularity: { $first: "$popularity" } } },
 ```
 
-Групує документи з однакоми полями track_id і повертає їх track_id, а також поля artists і popularity з першого знайденого документа з таким track_id, щоб не повертати дублікатів. Один трек у датасеті може лежати в кількох жанрах, тому без цього кроку виконавці отримали б зайві треки.
+Групує документи з однаковими полями track_id і повертає їх track_id, а також поля artists і popularity з першого знайденого документа з таким track_id, щоб не повертати дублікатів. Один трек у датасеті може лежати в кількох жанрах, тому без цього кроку виконавці отримали б зайві треки.
 
 Етап 2.
 
@@ -402,7 +402,7 @@ const task3Result = db.tracks.aggregate([
 { $group: { ... } }
 ```
 
-Групує треки за жанром, видає для кожного жанру середній темп треків, стандартне відхилення темпу треків (за допомогою `$stdDevPop`), яке дозволяє знайти викиди для даних з нормальним розподілом, яких згідно статистики є приблизно 2.1%, а також всі треки в цьому жанрі з деякою інформацію про них.
+Групує треки за жанром, видає для кожного жанру середній темп треків, стандартне відхилення темпу треків (за допомогою `$stdDevPop`), яке дозволяє знайти викиди для даних з нормальним розподілом, яких згідно статистики є приблизно 2.3%, а також всі треки в цьому жанрі з деякою інформацію про них.
 
 Етап 2.
 
@@ -477,13 +477,15 @@ const task3Result = db.tracks.aggregate([
 ### Запит 4
 
 ```javascript
+const task4Filter = {
+    "audio_features.loudness": { $lt: -10 },
+    "audio_features.speechiness": { $lt: 0.1 },
+    "audio_features.instrumentalness": { $gt: 0.5 },
+    explicit: false
+};
+
 const task4Result = db.tracks.find(
-    {
-        "audio_features.loudness": { $lt: -10 },
-        "audio_features.speechiness": { $lt: 0.1 },
-        "audio_features.instrumentalness": { $gt: 0.5 },
-        explicit: false
-    },
+    task4Filter,
     {
         _id: 0,
         track_id: 1,

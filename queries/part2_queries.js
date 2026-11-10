@@ -127,13 +127,15 @@ print("Task 3")
 print("Tracks with unusually high tempo for their genre:");
 task3Result.forEach((genre) => printjson(genre));
 
+const task4Filter = {
+    "audio_features.loudness": { $lt: -10 },
+    "audio_features.speechiness": { $lt: 0.1 },
+    "audio_features.instrumentalness": { $gt: 0.5 },
+    explicit: false
+};
+
 const task4Result = db.tracks.find(
-    {
-        "audio_features.loudness": { $lt: -10 },
-        "audio_features.speechiness": { $lt: 0.1 },
-        "audio_features.instrumentalness": { $gt: 0.5 },
-        explicit: false
-    },
+    task4Filter,
     {
         _id: 0,
         track_id: 1,
@@ -147,5 +149,5 @@ const task4Result = db.tracks.find(
 ).sort({ "audio_features.loudness": 1, track_name: 1 });
 
 print("Task 4")
-print("Tracks suitable for background listening while working:");
+print("Tracks suitable for background listening while working: " + db.tracks.countDocuments(task4Filter));
 task4Result.forEach((track) => printjson(track));
